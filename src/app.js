@@ -4,8 +4,11 @@ const connectDB = require('./config/database')
 const User = require('./models/user');
 const { validateSignUpData } = require("../src/helpers/validations");
 const bcrypt = require("bcrypt");
+const jwt = require("jsonwebtoken");
+const cookieParser = require("cookie-parser");
 
-app.use(express.json())
+app.use(express.json());
+app.use(cookieParser());
 
 app.post('/signup', async (req, res) => {
   try {
@@ -39,6 +42,9 @@ app.post("/login", async (req, res) => {
     };
     const isPasswordValid = await bcrypt.compare(password, doesUserExist.password);
     if (isPasswordValid) {
+
+      const token = jwt.sign({ _id: doesUserExist._id }, "DEV@Tinder$7868");
+      res.cookie("token", token)
       res.send("Login Successful !!!")
     } else {
       throw new Error("Invalid Credentials")
@@ -47,6 +53,30 @@ app.post("/login", async (req, res) => {
   } catch (error) {
     res.status(400).send("ERROR : " + error.message);
   }
+});
+
+app.get("/profile", async (req, res) => {
+
+  try {
+    const cookies = req.cookies;
+
+    const { token } = cookies;
+
+    if (!token) {
+      throw new Error("Invalid Token");
+    }
+    const decodedMessage = jwt.verify(token, "DEV@Tinder$7868");
+
+    const { _id } = decodedMessage;
+    const loggedInuser = await User.findById(_id);
+    if (!loggedInuser) {
+      throw new Error("User not found");
+    }
+    res.send(loggedInuser);
+
+  } catch (error) {
+    res.send("ERROR : " + error.message);
+  };
 });
 
 app.get('/user', async (req, res) => {
@@ -104,12 +134,10 @@ app.patch("/user/:userId", async (req, res) => {
 
     if (updatedUser) {
       res.status(200).json({ message: "User updated successfully", user: updatedUser });
-      console.log("updatedUser", updatedUser);
     } else {
       res.status(404).json({ message: "User not found" });
     };
   } catch (error) {
-    console.error("Error updating user:", error);
     res.status(500).json({ message: "Internal server error" });
   }
 });
