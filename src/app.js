@@ -1,19 +1,52 @@
 const express = require("express")
 const app = express();
 const connectDB = require('./config/database')
-const User = require('./models/user')
+const User = require('./models/user');
+const { validateSignUpData } = require("../src/helpers/validations");
+const bcrypt = require("bcrypt");
 
 app.use(express.json())
 
 app.post('/signup', async (req, res) => {
-  const user = new User(req.body);
   try {
+    // Validating the Data
+    validateSignUpData(req);
+
+    // Encrypting the Password
+    const { firstName, lastName, emailId, password } = req.body;
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    // Creating the new Instance of User.
+    const user = new User({
+      firstName, lastName, emailId, password: passwordHash
+    });
     await user.save(user);
     res.send("User added successfully!")
   } catch (error) {
-    res.status(400).send(error.message)
+    res.status(400).send("ERROR : " + error.message)
   }
 
+});
+
+app.post("/login", async (req, res) => {
+  try {
+    const { emailId, password } = req.body;
+
+    const doesUserExist = await User.findOne({ emailId: emailId });
+
+    if (!doesUserExist) {
+      throw new Error("Invalid Credentials");
+    };
+    const isPasswordValid = await bcrypt.compare(password, doesUserExist.password);
+    if (isPasswordValid) {
+      res.send("Login Successful !!!")
+    } else {
+      throw new Error("Invalid Credentials")
+    }
+
+  } catch (error) {
+    res.status(400).send("ERROR : " + error.message);
+  }
 });
 
 app.get('/user', async (req, res) => {
@@ -40,21 +73,46 @@ app.get("/feed", async (req, res) => {
   }
 });
 
-app.post("/user", async (req, res) => {
-  const { firstName, updateData } = req.body
-  try {
-    const updatedUser = await User.findOneAndUpdate({ firstName: firstName }, { $set: updateData }, { new: true });
-    if (updatedUser) {
-      res.status(200).json({ message: 'User updated successfully', user: updatedUser });
-      console.log("updatedUser", updatedUser)
-    } else {
-      res.status(404).json({ message: 'User not found' });
-    }
+app.patch("/user/:userId", async (req, res) => {
+  const userId = req.params?.userId;
+  const data = req.body;
 
-  } catch (error) {
+  const allowedFields = ["age", "phoneNumber", "skills"] // example fields
 
+  const isValidUpdate = Object.keys(data).every(field =>
+    allowedFields.includes(field)
+  );
+
+  if (!isValidUpdate) {
+    return res.status(400).send({
+      message: "Update contains disallowed fields. Only the following fields can be updated: " + allowedFields.join(", ")
+    });
   }
-})
+
+  if (data.skills?.length > 20) {
+    return res.status(400).send({
+      message: "Skills should not exceed more than 20"
+    })
+  }
+
+  try {
+    const updatedUser = await User.findByIdAndUpdate(
+      { _id: userId },
+      data,
+      { returnDocument: "after", runValidators: true }
+    );
+
+    if (updatedUser) {
+      res.status(200).json({ message: "User updated successfully", user: updatedUser });
+      console.log("updatedUser", updatedUser);
+    } else {
+      res.status(404).json({ message: "User not found" });
+    };
+  } catch (error) {
+    console.error("Error updating user:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
 
 connectDB()
   .then(() => {
@@ -65,4 +123,4 @@ connectDB()
   })
   .catch((error) => {
     console.log(error.message);
-  })
+  });
