@@ -10,8 +10,24 @@ const validateSignUpData = (req) => {
     } else if (!validator.isEmail(emailId)) {
         throw new Error("Email is not valid");
     }
-}
+};
+
+const validateEditProfileData = (req) => {
+    const allowedEditFields = ["firstName", "lastName", "age", "gender", "skills", "photoURL", "about"];
+
+    const {skills} = req.body;
+
+    if(skills.length > 20) {
+        return {valid: false, message: "Skills set is exceded"};
+    }
+
+    const isEditAllowed = Object.keys(req.body).every((field) => allowedEditFields.includes(field));
+    if(!isEditAllowed) {
+        return {valid: false, message: "Invalid Edit Request!!"};
+    }
+    return {valid: true};
+};
 
 module.exports = {
-    validateSignUpData
+    validateSignUpData, validateEditProfileData
 }

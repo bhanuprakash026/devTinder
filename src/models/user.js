@@ -62,6 +62,13 @@ const userSchema = new mongoose.Schema({
 				throw new Error("Invalid Photo URL: " + value)
 			}
 		}
+	},
+	about: {
+		type: String,
+		default: "This is he default about of the user!"
+	},
+	skills: {
+		type: [String],
 	}
 }, { timestamps: true });
 
